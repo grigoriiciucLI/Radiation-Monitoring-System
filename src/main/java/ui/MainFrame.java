@@ -5,6 +5,7 @@ import repository.ReadingRepositoryImpl;
 import repository.StationRepositoryImpl;
 import service.ReadingService;
 import service.StationService;
+import transactions.TransactionsPanel;
 import validator.ValidationException;
 
 import javax.swing.*;
@@ -18,17 +19,24 @@ import java.awt.event.MouseEvent;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+
 /**
  * MainFrame – primary Swing window for the Radiation Monitoring System.
- * Uses StationService and ReadingService
+ *
+ * Lab-2 change: the window now uses a JTabbedPane so the existing monitoring
+ * UI lives on the first tab and the Lab-2 transaction demonstrations live on
+ * the second tab.  No existing logic was modified.
  */
 public class MainFrame extends JFrame {
+
     private static final DateTimeFormatter DT_FMT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
     private final StationService stationService =
             new StationService(new StationRepositoryImpl());
     private final ReadingService readingService =
             new ReadingService(new ReadingRepositoryImpl());
+
     private List<MonitoringStation> stations;
     private List<RadiationReading>  readings;
     private int selectedStationId = -1;
@@ -44,25 +52,39 @@ public class MainFrame extends JFrame {
         @Override public boolean isCellEditable(int r, int c) { return false; }
     };
     private final JTable readingTable = new JTable(readingModel);
+
     private final JTextField tfStationSearch = new JTextField(16);
-    private final JTextField tfReadingSearch = new JTextField(14);
+    private final JTextField tfReadingSearch  = new JTextField(14);
 
     public MainFrame() {
         super("Radiation Monitoring System");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(1050, 720);
-        setMinimumSize(new Dimension(820, 580));
+        setSize(1050, 760);
+        setMinimumSize(new Dimension(820, 600));
         setLocationRelativeTo(null);
         buildUI();
         applyTheme();
         loadStations();
     }
+
+    // ── UI construction ──────────────────────────────────────────────────
+
     private void buildUI() {
-        JPanel root = new JPanel(new BorderLayout());
-        root.add(buildTopBar(), BorderLayout.NORTH);
-        root.add(buildSplitPane(), BorderLayout.CENTER);
-        setContentPane(root);
+        JTabbedPane tabs = new JTabbedPane();
+
+        // Tab 1 – existing monitoring application
+        JPanel monitoringTab = new JPanel(new BorderLayout());
+        monitoringTab.add(buildTopBar(),    BorderLayout.NORTH);
+        monitoringTab.add(buildSplitPane(), BorderLayout.CENTER);
+        tabs.addTab("📡  Radiation Monitor", monitoringTab);
+
+        // Tab 2 – Lab 2 transaction demonstrations
+        tabs.addTab("🔬  Lab 2 – Transactions", new TransactionsPanel());
+
+        setContentPane(tabs);
     }
+
+    // ── Everything below is unchanged from the original MainFrame ────────
 
     private JPanel buildTopBar() {
         JPanel bar = new JPanel(new BorderLayout(10, 6));
@@ -74,7 +96,7 @@ public class MainFrame extends JFrame {
         title.setForeground(new Color(0, 220, 180));
         bar.add(title, BorderLayout.WEST);
 
-        JButton btnSearch  = styledBtn("Search", new Color(70, 130, 180));
+        JButton btnSearch  = styledBtn("Search",  new Color(70, 130, 180));
         JButton btnRefresh = styledBtn("Refresh", new Color(55, 120, 55));
         btnSearch.addActionListener(e  -> searchStations());
         btnRefresh.addActionListener(e -> { tfStationSearch.setText(""); loadStations(); });
@@ -104,11 +126,9 @@ public class MainFrame extends JFrame {
         stationTable.setRowHeight(22);
         stationTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         stationTable.setAutoCreateRowSorter(true);
-
         stationTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) onStationSelected();
         });
-
         JPanel p = new JPanel(new BorderLayout());
         p.setBorder(titledBorder("Monitoring Stations"));
         p.add(new JScrollPane(stationTable), BorderLayout.CENTER);
@@ -121,20 +141,19 @@ public class MainFrame extends JFrame {
         readingTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 12));
         readingTable.setAutoCreateRowSorter(true);
         readingTable.setDefaultRenderer(Object.class, new AlertStatusRenderer());
-
         readingTable.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) editReading();
             }
         });
 
-        JButton btnAdd    = styledBtn("+ Add",    new Color(50, 140, 80));
+        JButton btnAdd    = styledBtn("+ Add",  new Color(50, 140, 80));
         JButton btnEdit   = styledBtn("Edit",   new Color(70, 130, 180));
         JButton btnDelete = styledBtn("Delete", new Color(185, 55, 55));
-        JButton btnSearch = styledBtn("Search",   new Color(100, 100, 145));
+        JButton btnSearch = styledBtn("Search", new Color(100, 100, 145));
 
-        btnAdd.addActionListener(e -> addReading());
-        btnEdit.addActionListener(e -> editReading());
+        btnAdd.addActionListener(e    -> addReading());
+        btnEdit.addActionListener(e   -> editReading());
         btnDelete.addActionListener(e -> deleteReading());
         btnSearch.addActionListener(e -> searchReadings());
 
@@ -146,15 +165,14 @@ public class MainFrame extends JFrame {
         toolbar.add(Box.createHorizontalStrut(14));
         toolbar.add(lbl); toolbar.add(tfReadingSearch); toolbar.add(btnSearch);
 
-        JPanel bottom = new JPanel(new BorderLayout());
-        bottom.add(toolbar, BorderLayout.WEST);
-
         JPanel p = new JPanel(new BorderLayout());
         p.setBorder(titledBorder("Radiation Readings  (select a station above)"));
         p.add(new JScrollPane(readingTable), BorderLayout.CENTER);
-        p.add(bottom, BorderLayout.SOUTH);
+        p.add(toolbar, BorderLayout.SOUTH);
         return p;
     }
+
+    // ── Data loading ──────────────────────────────────────────────────────
 
     private void loadStations() {
         try {
@@ -224,6 +242,8 @@ public class MainFrame extends JFrame {
         }
     }
 
+    // ── CRUD actions ──────────────────────────────────────────────────────
+
     private void addReading() {
         if (selectedStationId < 0) { info("Please select a station first."); return; }
         ReadingFormDialog dlg = new ReadingFormDialog(this, selectedStationId);
@@ -231,17 +251,13 @@ public class MainFrame extends JFrame {
         if (dlg.isConfirmed()) {
             RadiationReading r = dlg.getReading();
             try {
-                readingService.create(
-                        selectedStationId,
-                        r.getTimestamp(),
-                        r.getRadiationLevel(),
-                        r.getRadiationType(),
-                        r.getAlertStatus(),
-                        r.getNotes()
-                );
+                readingService.create(selectedStationId, r.getTimestamp(),
+                        r.getRadiationLevel(), r.getRadiationType(),
+                        r.getAlertStatus(), r.getNotes());
                 loadReadings(selectedStationId);
             } catch (ValidationException ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Validation Error", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, ex.getMessage(),
+                        "Validation Error", JOptionPane.WARNING_MESSAGE);
             } catch (SQLException ex) { dbError("Add failed", ex); }
         }
     }
@@ -254,20 +270,18 @@ public class MainFrame extends JFrame {
         RadiationReading existing = readings.stream()
                 .filter(r -> r.getId() == rid).findFirst().orElse(null);
         if (existing == null) return;
-
         ReadingFormDialog dlg = new ReadingFormDialog(this, existing, selectedStationId);
         dlg.setVisible(true);
         if (dlg.isConfirmed()) {
             RadiationReading r = dlg.getReading();
             try {
-                readingService.edit(
-                        rid, selectedStationId,
-                        r.getTimestamp(), r.getRadiationLevel(),
-                        r.getRadiationType(), r.getAlertStatus(), r.getNotes()
-                );
+                readingService.edit(rid, selectedStationId, r.getTimestamp(),
+                        r.getRadiationLevel(), r.getRadiationType(),
+                        r.getAlertStatus(), r.getNotes());
                 loadReadings(selectedStationId);
             } catch (ValidationException ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Validation Error", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this, ex.getMessage(),
+                        "Validation Error", JOptionPane.WARNING_MESSAGE);
             } catch (SQLException ex) { dbError("Update failed", ex); }
         }
     }
@@ -277,7 +291,6 @@ public class MainFrame extends JFrame {
         if (vr < 0) { info("Please select a reading to delete."); return; }
         int mr  = readingTable.convertRowIndexToModel(vr);
         int rid = (int) readingModel.getValueAt(mr, 0);
-
         int choice = JOptionPane.showConfirmDialog(this,
                 "Delete reading ID " + rid + "?\nThis cannot be undone.",
                 "Confirm Delete", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
@@ -288,6 +301,8 @@ public class MainFrame extends JFrame {
             } catch (SQLException ex) { dbError("Delete failed", ex); }
         }
     }
+
+    // ── Styling helpers ──────────────────────────────────────────────────
 
     private void info(String msg) {
         JOptionPane.showMessageDialog(this, msg, "Info", JOptionPane.INFORMATION_MESSAGE);
@@ -309,7 +324,8 @@ public class MainFrame extends JFrame {
 
     private TitledBorder titledBorder(String title) {
         TitledBorder b = BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(new Color(90,90,115), 1), "  " + title + "  ");
+                BorderFactory.createLineBorder(new Color(90, 90, 115), 1),
+                "  " + title + "  ");
         b.setTitleFont(new Font("SansSerif", Font.BOLD, 12));
         b.setTitleColor(new Color(55, 100, 165));
         return b;
@@ -322,6 +338,8 @@ public class MainFrame extends JFrame {
         stationTable.setGridColor(grid);
         readingTable.setGridColor(grid);
     }
+
+    // ── Alert-status row colouring ────────────────────────────────────────
 
     private static class AlertStatusRenderer extends DefaultTableCellRenderer {
         private static final Color COLOR_NORMAL   = new Color(220, 245, 220);
@@ -337,8 +355,8 @@ public class MainFrame extends JFrame {
             if (isSelected) {
                 c.setBackground(COLOR_SELECTED);
             } else {
-                int modelRow = table.convertRowIndexToModel(row);
-                Object status = table.getModel().getValueAt(modelRow, 4);
+                int mr = table.convertRowIndexToModel(row);
+                Object status = table.getModel().getValueAt(mr, 4);
                 if ("Critical".equals(status))     c.setBackground(COLOR_CRITICAL);
                 else if ("Warning".equals(status)) c.setBackground(COLOR_WARNING);
                 else                               c.setBackground(COLOR_NORMAL);
